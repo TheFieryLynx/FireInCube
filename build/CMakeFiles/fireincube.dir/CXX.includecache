@@ -1,0 +1,46 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/andrew/Documents/CGRT/FIreInCube/functions.h
+
+/Users/andrew/Documents/CGRT/FIreInCube/main.cpp
+iostream
+-
+vector
+-
+cmath
+-
+fstream
+-
+templates.h
+/Users/andrew/Documents/CGRT/FIreInCube/templates.h
+functions.h
+/Users/andrew/Documents/CGRT/FIreInCube/functions.h
+stb_image_write.h
+/Users/andrew/Documents/CGRT/FIreInCube/stb_image_write.h
+
+/Users/andrew/Documents/CGRT/FIreInCube/stb_image_write.h
+stdlib.h
+-
+stdio.h
+-
+stdarg.h
+-
+stdlib.h
+-
+string.h
+-
+math.h
+-
+assert.h
+-
+
+/Users/andrew/Documents/CGRT/FIreInCube/templates.h
+cmath
+-
+
