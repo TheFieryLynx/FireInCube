@@ -2,7 +2,7 @@
 
 mkdir -p build
 cd ./build
-rm -rf *
-cmake ..
+#rm -rf *
+#cmake ..
 make
 ./fireincube

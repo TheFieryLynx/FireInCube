@@ -8,6 +8,8 @@
 
 /Users/andrew/Documents/CGRT/FIreInCube/functions.h
 
+/Users/andrew/Documents/CGRT/FIreInCube/geom.h
+
 /Users/andrew/Documents/CGRT/FIreInCube/main.cpp
 iostream
 -
@@ -17,8 +19,10 @@ cmath
 -
 fstream
 -
-templates.h
-/Users/andrew/Documents/CGRT/FIreInCube/templates.h
+algorithm
+-
+geom.h
+/Users/andrew/Documents/CGRT/FIreInCube/geom.h
 functions.h
 /Users/andrew/Documents/CGRT/FIreInCube/functions.h
 stb_image_write.h
@@ -38,9 +42,5 @@ string.h
 math.h
 -
 assert.h
--
-
-/Users/andrew/Documents/CGRT/FIreInCube/templates.h
-cmath
 -
 
