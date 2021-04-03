@@ -6,8 +6,6 @@
 
 #IncludeRegexTransform: 
 
-/Users/andrew/Documents/CGRT/FIreInCube/functions.h
-
 /Users/andrew/Documents/CGRT/FIreInCube/geom.h
 
 /Users/andrew/Documents/CGRT/FIreInCube/main.cpp
@@ -23,8 +21,6 @@ algorithm
 -
 geom.h
 /Users/andrew/Documents/CGRT/FIreInCube/geom.h
-functions.h
-/Users/andrew/Documents/CGRT/FIreInCube/functions.h
 stb_image_write.h
 /Users/andrew/Documents/CGRT/FIreInCube/stb_image_write.h
 
