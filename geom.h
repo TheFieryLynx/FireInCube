@@ -1,6 +1,7 @@
 #ifndef __TEMPLATES_H__
 #define __TEMPLATES_H__
 
+
 struct Vec3D
 {
     Vec3D() {
@@ -32,6 +33,7 @@ struct Material {
 };
 
 Vec3D cross (const Vec3D& a, const Vec3D& b); 
+float dot(const Vec3D& a, const Vec3D &b);
 
 Vec3D operator-(const Vec3D& l_v, const Vec3D& r_v)
 {
@@ -175,23 +177,20 @@ struct Sphere {
     bool ray_intersect(const Vec3D&, const Vec3D&, float&) const; 
 };
 
-bool Sphere::ray_intersect(const Vec3D &orig, const Vec3D &dir, float &t0) const 
+bool Sphere::ray_intersect(const Vec3D &orig, const Vec3D &dir, float &t) const 
 {
-        Vec3D L = center - orig;
-        float tca = L*dir;
-        float d2 = L*L - tca*tca;
-        if (d2 > radius*radius) return false;
-        float thc = sqrtf(radius*radius - d2);
-        t0       = tca - thc;
-        float t1 = tca + thc;
-        if (t0 < 0) t0 = t1;
-        if (t0 < 0) return false;
-        return true;
-    }
+    Vec3D oc = orig - center;
+    float a = dot(dir, dir);
+    float b = 2.0 * dot(oc, dir);
+    float c = dot(oc,oc) - radius*radius;
+    float discriminant = b*b - 4*a*c;
+    t = (- b - sqrt(discriminant)) / (2.0*a);
+    return (discriminant > 0);
+}
 
 bool equals(const float& a, const float& b) {
     //std::cout << a << " VS " << b << std::endl;
-    if (fabs(a - b) < 0.01) {
+    if (fabs(a - b) < 0.1) {
         //std::cout << a << " VS " << b << "==" << fabs(a - b) <<  " true" << std::endl;
         return true;
     }
@@ -268,7 +267,7 @@ Vec3D Cube::normInPoint(const Vec3D& point) const
         return norms[5];
     }
 
-    std::cout << "This " << point.z << std::endl;
+    std::cout << "This " << point << std::endl;
     std::cout << vertices[0].z << std::endl;
     std::cout << vertices[3].z << std::endl;
     std::cout << vertices[4].z << std::endl;
@@ -286,12 +285,14 @@ Vec3D Cube::normInPoint(const Vec3D& point) const
 bool Cube::ray_intersect(const Ray& r, float& t) const 
 { 
     float tmin, tmax, tymin, tymax, tzmin, tzmax; 
+    //t = std::numeric_limits<float>::max();
 
     tmin = (bounds[r.sign[0]].x - r.orig.x) * r.invdir.x; 
     tmax = (bounds[1-r.sign[0]].x - r.orig.x) * r.invdir.x; 
     tymin = (bounds[r.sign[1]].y - r.orig.y) * r.invdir.y; 
     tymax = (bounds[1-r.sign[1]].y - r.orig.y) * r.invdir.y; 
 
+    //std::cout << "|||||||| " << tmin << " " << tmax << std::endl;
     if ((tmin > tymax) || (tymin > tmax)) 
         return false; 
 
@@ -310,7 +311,7 @@ bool Cube::ray_intersect(const Ray& r, float& t) const
     tmin = tzmin; 
     if (tzmax < tmax) 
     tmax = tzmax; 
-
+    
     t = tmin; 
 
     if (t < 0) { 
@@ -333,7 +334,7 @@ Vec3D cross (const Vec3D& a, const Vec3D& b)
 
 float dot(const Vec3D& a, const Vec3D &b) 
 {   
-    return a.x * b.x + a.y * b.y + a.z + b.z;
+    return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
 #endif //__TEMPLATES_H__
