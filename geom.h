@@ -1,6 +1,25 @@
 #ifndef __TEMPLATES_H__
 #define __TEMPLATES_H__
 
+struct Pixel_final
+{
+    Pixel_final(){}
+    Pixel_final(const uint8_t& r_, const uint8_t& g_, const uint8_t& b_) : R(r_), G(g_), B(b_) {}
+    uint8_t R;
+    uint8_t G;
+    uint8_t B;
+};
+
+struct Vec2D
+{
+    Vec2D() {
+        x = 0.;
+        y = 0.;
+    }
+    Vec2D(const float& x_, const float& y_) : x(x_), y(y_) {}
+    float x;
+    float y;
+};
 
 struct Vec3D
 {
@@ -19,17 +38,23 @@ struct Vec3D
 
 struct Pixel
 {
-    Pixel(){}
-    Pixel(const uint8_t& r_, const uint8_t& g_, const uint8_t& b_) : R(r_), G(g_), B(b_) {}
-    uint8_t R;
-    uint8_t G;
-    uint8_t B;
+    Pixel(){
+        R = 0.;
+        G = 0.;
+        B = 0.;
+    }
+    Pixel(const float& r_, const float& g_, const float& b_) : R(r_), G(g_), B(b_) {}
+    float R;
+    float G;
+    float B;
 };
 
 struct Material {
-    Material(const Pixel& color) : diffuse_color(color) {}
-    Material() : diffuse_color() {}
+    Material(const Vec2D& a_, const Pixel& c_, const float &s_) : albedo(a_), diffuse_color(c_), specular_exponent(s_) {}
+    Material() : albedo(1, 0), diffuse_color(), specular_exponent() {}
+    Vec2D albedo;
     Pixel diffuse_color;
+    float specular_exponent;
 };
 
 Vec3D cross (const Vec3D& a, const Vec3D& b); 
@@ -40,6 +65,14 @@ Vec3D operator-(const Vec3D& l_v, const Vec3D& r_v)
     float x = l_v.x - r_v.x;
     float y = l_v.y - r_v.y;
     float z = l_v.z - r_v.z;
+    return Vec3D(x, y, z);
+}
+
+Vec3D operator-(const Vec3D& l_v)
+{
+    float x = -l_v.x;
+    float y = -l_v.y;
+    float z = -l_v.z;
     return Vec3D(x, y, z);
 }
 
@@ -68,40 +101,90 @@ float Vec3D::norm() {
     return std::sqrt(x * x + y * y + z * z);
 }
 
+Vec3D reflect(const Vec3D& I, const Vec3D& N) {
+    return N * 2.f * dot(I, N) - I;
+}
+
 Vec3D Vec3D::normalize() {
     *this = (*this) * (1. / norm());
     return *this;
 }
 
 std::ostream& operator<<(std::ostream& out, const Vec3D& v) {
-    out << v.x << " " << v.y << " " << v.z;;
+    out << v.x << " " << v.y << " " << v.z;
+    return out ;
+}
+
+std::ostream& operator<<(std::ostream& out, const Pixel& v) {
+    out << v.R << " " << v.G << " " << v.B;
     return out ;
 }
 
 Pixel operator*(const Pixel& l_v, float c) 
 {
-    uint8_t r, g, b;
-    if (l_v.R * c > 255) {
+    float r, g, b;
+    r = l_v.R * c;
+    g = l_v.G * c;
+    b = l_v.B * c;
+    /*
+    if (int(l_v.R) * c > 255) {
         r = 255;
     } else {
-        r = uint8_t(l_v.R * c);
+        r = float(l_v.R * c);
     }
 
-    if (l_v.G * c > 255) {
+    if (int(l_v.G) * c > 255) {
         g = 255;
     } else {
-        g = uint8_t(l_v.G * c);
+        g = float(l_v.G * c);
     }
 
-    if (l_v.B * c > 255) {
+    if (int(l_v.B) * c > 255) {
         b = 255;
     } else {
-        b = uint8_t(l_v.B * c);
+        b = float(l_v.B * c);
     }
+    */
     
     return Pixel(r, g , b);
 }
 
+Pixel operator+(const Pixel& l_v, const Pixel& r_v)
+{
+    float r, g, b;
+    r = l_v.R + r_v.R;
+    g = l_v.G * r_v.G;
+    b = l_v.B + r_v.B;
+    /*
+    if (int(l_v.R) + int(r_v.R) > 255) {
+        r = 255;
+    } else {
+        r = l_v.R + r_v.R;
+    }
+
+    if (int(l_v.G) + int(r_v.G) > 255) {
+        g = 255;
+    } else {
+        g = l_v.G * r_v.G;
+    }
+
+    if (int(l_v.B) + int(r_v.B) > 255) {
+        b = 255;
+    } else {
+        b = l_v.B + r_v.B;
+    }*/
+    
+    return Pixel(r, g , b);
+}
+
+Pixel operator/(const Pixel& l_v, float c)
+{
+    float r, g, b;
+    r = l_v.R / c;
+    g = l_v.G / c;
+    b = l_v.B / c;
+    return Pixel(r, g, b);
+}
 
 struct Light {
     Light(const Vec3D& p, const float& i) : position(p), intensity(i) {}
@@ -190,7 +273,7 @@ bool Sphere::ray_intersect(const Vec3D &orig, const Vec3D &dir, float &t) const
 
 bool equals(const float& a, const float& b) {
     //std::cout << a << " VS " << b << std::endl;
-    if (fabs(a - b) < 0.1) {
+    if (fabs(a - b) < 0.001) {
         //std::cout << a << " VS " << b << "==" << fabs(a - b) <<  " true" << std::endl;
         return true;
     }
