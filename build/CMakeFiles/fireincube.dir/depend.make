@@ -3,5 +3,6 @@
 
 CMakeFiles/fireincube.dir/main.cpp.o: ../geom.h
 CMakeFiles/fireincube.dir/main.cpp.o: ../main.cpp
+CMakeFiles/fireincube.dir/main.cpp.o: ../stb_image.h
 CMakeFiles/fireincube.dir/main.cpp.o: ../stb_image_write.h
 

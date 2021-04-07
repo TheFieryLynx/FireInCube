@@ -9,6 +9,12 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+int envmap_width, envmap_height;
+std::vector<Pixel> envmap;
+
 float cosinus(const Vec3D& a, const Vec3D& b) 
 {
     float m = dot(a, b);
@@ -17,54 +23,125 @@ float cosinus(const Vec3D& a, const Vec3D& b)
     return m / (n1 * n2);
 }
 
-bool scene_sphere_intersect(const Ray& ray, const Sphere &sphere, float &dist_i, Vec3D& point, Vec3D& N, Material &material) {
-    if (sphere.ray_intersect(ray.orig, ray.dir, dist_i)) {
+template <typename Object>
+bool scene_intersect(const Ray& ray, const Object &obj, float &dist_i, Vec3D& point, Vec3D& N, Material &material) {
+    float obj_dist = std::numeric_limits<float>::max();
+    if (obj.ray_intersect(ray, dist_i)) {
+        obj_dist = dist_i;
         point = ray.orig + ray.dir * dist_i;
-        N = (point - sphere.center).normalize();
-        material = sphere.material;
-        return true;
+        N = obj.normInPoint(point);
+        material = obj.material;
     }
-    return false;
+    return obj_dist < 10000;
+    // float checkerboard_dist = std::numeric_limits<float>::max();
+    // if (fabs(ray.dir.y)>1e-3)  {
+    //     float d = -(ray.orig.y+4)/ray.dir.y; // the checkerboard plane has equation y = -4
+    //     Vec3D pt = ray.orig + ray.dir*d;
+    //     if (d > 0 && fabs(pt.x)<10 && pt.z<-10 && pt.z>-30 && d<spheres_dist) {
+    //         checkerboard_dist = d;
+    //         point = pt;
+    //         N = Vec3D(0,1,0);
+    //         material.diffuse_color = (int(.5*point.x+1000) + int(.5*point.z)) & 1 ? Pixel(1,1,1) : Pixel(1, .7, .3);
+    //         material.diffuse_color = material.diffuse_color * .3;
+    //     }
+    // }
+    //std::cout << checkerboard_dist << std::endl;
+    //return std::min(spheres_dist, checkerboard_dist)<1000;
 }
 
-bool cast_ray_sphere(const Ray& ray, const Sphere &sphere, float &dist_i, Vec3D& point, Vec3D& N, Material &material, const std::vector<Light>& lights) 
-{   
-    if(scene_sphere_intersect(ray, sphere, dist_i, point, N, material)) {
-        float diffuse_light_intensity = 0;
+template <typename Object>
+bool cast_ray_object(const Ray& ray, const WorldObjects& world_obj, const Object &obj, float &dist_i, Vec3D& point, Vec3D& N, Material &material)
+{
+    if(scene_intersect(ray, obj, dist_i, point, N, material)) {
+        float diffuse_light_intensity = 0.5;
         float specular_light_intensity = 0;
-        
-        for (int i = 0; i < int(lights.size()); ++i) {
-            Vec3D light_dir = (lights[i].position - point).normalize();
+        for (int i = 0; i < int(world_obj.lights.size()); ++i) {
+            Vec3D light_dir = (world_obj.lights[i].position - point).normalize();
+            bool check = true;
 
-            // float light_distance = (lights[i].position - point).norm();
-            // std::cout << "!" << std::endl;
-            // Vec3D shadow_orig = dot(light_dir, N) < 0 ? point - N * 1e-3 : point + N * 1e-3; // checking if the point lies in the shadow of the lights[i]
-            // std::cout << "#" << std::endl;
-            // Vec3D shadow_pt, shadow_N;
-            // float t_tmp;
-            // Ray new_ray(shadow_orig, light_dir);
-            // Material tmpmaterial;
-            // if (scene_sphere_intersect(new_ray, sphere, t_tmp, shadow_pt, shadow_N, tmpmaterial, lights) && (shadow_pt - shadow_orig).norm() < light_distance) {
-            //     continue;
-            // }
-            //std::cout << material.specular_exponent << std::endl;
-            diffuse_light_intensity  += lights[i].intensity * std::max(0.f, dot(N, light_dir));  //fabs(cosinus(light_dir, N)); //std::max(0.f, light_dir * N);
-            specular_light_intensity += powf(std::max(0.f, dot(reflect(light_dir, N), -ray.dir)), material.specular_exponent) * lights[i].intensity;
+            float light_distance = (world_obj.lights[i].position - point).norm();
+            //std::cout << N << std::endl;
+            Vec3D shadow_orig = dot(light_dir, N) < 0 ? point - N * 0.001 : point + N * 0.001; // checking if the point lies in the shadow of the world_obj.lights[i]
+            //std::cout << "#" << std::endl;
+            Vec3D tmp_pt, shadow_pt, shadow_N;
+            float t_tmp, t = std::numeric_limits<float>::max();
+            Ray new_ray(shadow_orig, light_dir);
+            Material tmpmaterial;
+            for(auto j : world_obj.spheres) {
+                if (scene_intersect(new_ray, j, t_tmp, tmp_pt, shadow_N, tmpmaterial)) {
+                    if (t_tmp < t) {
+                        shadow_pt = tmp_pt;
+                        t = t_tmp;
+                    }
+                    if ((shadow_pt - shadow_orig).norm() < light_distance) {
+                        check = false;
+                    }
+                }
+            }
+            if (check) {
+                if (scene_intersect(new_ray, world_obj.cubes[0], t_tmp, tmp_pt, shadow_N, tmpmaterial)) {
+                    if (t_tmp < t) {
+                        shadow_pt = tmp_pt;
+                        t = t_tmp;
+                    }
+                    if ((shadow_pt - shadow_orig).norm() < light_distance) {
+                        check = false;
+                    }
+                }
+            }
+
+            if (check) {
+                diffuse_light_intensity  += world_obj.lights[i].intensity * std::max(0.f, dot(N, light_dir));  //fabs(cosinus(light_dir, N)); //std::max(0.f, light_dir * N);
+                specular_light_intensity += powf(std::max(0.f, dot(reflect(light_dir, N), -ray.dir)), material.specular_exponent) * world_obj.lights[i].intensity;
+            }  
         }
-        
         material.diffuse_color = material.diffuse_color * diffuse_light_intensity * material.albedo.x + Pixel(1., 1., 1.) * specular_light_intensity * material.albedo.y;;
         return true;
     }
     return false;
 }
 
-bool scene_cube_intersect(const Ray& ray, const Cube &cube, float& t, Vec3D& point, Vec3D& N, Material &material) 
-{
-    if(cube.ray_intersect(ray, t)) {
-        point = ray.orig + ray.dir * t;
-        N = cube.normInPoint(point);
-        //std::cout << N << std::endl;
-        material = cube.material;
+/*
+bool cast_ray_sphere(const Ray& ray, const WorldObjects& world_obj, const Sphere &sphere, float &dist_i, Vec3D& point, Vec3D& N, Material &material) 
+{   
+    if(scene_intersect(ray, sphere, dist_i, point, N, material)) {
+        float diffuse_light_intensity = 0.5;
+        float specular_light_intensity = 0;
+        
+        for (int i = 0; i < int(world_obj.lights.size()); ++i) {
+            Vec3D light_dir = (world_obj.lights[i].position - point).normalize();
+            bool check = true;
+            
+            // float light_distance = (world_obj.lights[i].position - point).norm();
+            // //std::cout << N << std::endl;
+            // Vec3D shadow_orig = dot(light_dir, N) < 0 ? point - N * 0.001 : point + N * 0.001; // checking if the point lies in the shadow of the world_obj.lights[i]
+            // //std::cout << "#" << std::endl;
+            // Vec3D tmp_pt, shadow_pt, shadow_N;
+            // float t_tmp, t = std::numeric_limits<float>::max();
+            // Ray new_ray(shadow_orig, light_dir);
+            // Material tmpmaterial;
+            // for(auto j : world_obj.spheres) {
+            //     if (scene_intersect(new_ray, j, t_tmp, tmp_pt, shadow_N, tmpmaterial)) {
+            //         //check = false;
+            //         if (t_tmp < t) {
+            //             shadow_pt = tmp_pt;
+            //             t = t_tmp;
+            //         }
+            //         if ((shadow_pt - shadow_orig).norm() < light_distance) {
+            //             //std::cout << shadow_pt << " - " << shadow_orig << " < " << light_distance << std::endl;
+            //             check = false;
+            //         }
+            //     }
+            // }
+
+            if (check) {
+                diffuse_light_intensity  += world_obj.lights[i].intensity * std::max(0.f, dot(N, light_dir));  //fabs(cosinus(light_dir, N)); //std::max(0.f, light_dir * N);
+                specular_light_intensity += powf(std::max(0.f, dot(reflect(light_dir, N), -ray.dir)), material.specular_exponent) * world_obj.lights[i].intensity;
+            }   
+            
+        }
+        
+        material.diffuse_color = material.diffuse_color * diffuse_light_intensity * material.albedo.x + Pixel(1., 1., 1.) * specular_light_intensity * material.albedo.y;;
         return true;
     }
     return false;
@@ -72,48 +149,44 @@ bool scene_cube_intersect(const Ray& ray, const Cube &cube, float& t, Vec3D& poi
 
 bool cast_ray_cube(const Ray& ray, const Cube &cube, float& t, Vec3D& point, Vec3D& N, Material &material, const std::vector<Light>& lights) 
 {
-    if(scene_cube_intersect(ray, cube, t, point, N, material)) {
-        float diffuse_light_intensity = 0;
+    if(scene_intersect(ray, cube, t, point, N, material)) {
+        float diffuse_light_intensity = 0.5;
         float specular_light_intensity = 0;
-        
         for (int i = 0; i < int(lights.size()); ++i) {
             Vec3D light_dir = (lights[i].position - point).normalize();
             diffuse_light_intensity  += lights[i].intensity * std::max(0.f, dot(N, light_dir));  //fabs(cosinus(light_dir, N)); //std::max(0.f, light_dir * N);
-            specular_light_intensity += powf(std::max(0.f, cosinus(reflect(light_dir, N), -ray.dir)), material.specular_exponent) * lights[i].intensity;
+            specular_light_intensity += powf(std::max(0.f, dot(reflect(light_dir, N), -ray.dir)), material.specular_exponent) * lights[i].intensity;
         }
         material.diffuse_color = material.diffuse_color * diffuse_light_intensity * material.albedo.x + Pixel(1., 1., 1.) * specular_light_intensity * material.albedo.y;;
         return true;
     }
     return false;
 }
+*/
 
-Pixel cast_ray(const Ray& ray, const std::vector<Sphere>& spheres, const Cube& cube, const std::vector<Light>& lights)
+Pixel cast_ray(const Ray& ray, const WorldObjects& world_obj)
 {
     Vec3D point, N;
     std::vector<int> flags;
-    for (int i = 0; i < int(spheres.size()) + 1; ++i) flags.push_back(1);
+    for (int i = 0; i < int(world_obj.spheres.size()) + 1; ++i) flags.push_back(1);
     std::vector<float> t_s;
     std::vector<Material> materials;
 
     float t_cube = std::numeric_limits<float>::max();
     Material cube_material;
-    if (!cast_ray_cube(ray, cube, t_cube, point, N, cube_material, lights)) {
+    if (!cast_ray_object(ray, world_obj, world_obj.cubes[0], t_cube, point, N, cube_material)) {
         flags[0] = 0;
         t_cube = -1.0;
-        //cube_material = Material(Vec2D(1, 0), Pixel(0., 0.78, 1.), 10.);
-        //return Pixel(0, 200, 255); // background color
     }
     materials.push_back(cube_material);
     t_s.push_back(t_cube);
 
-    for (int num_s = 0; num_s < int(spheres.size()); ++num_s) {
+    for (int num_s = 0; num_s < int(world_obj.spheres.size()); ++num_s) {
         float t_sphere = std::numeric_limits<float>::max();
         Material sphere_material;
-        if (!cast_ray_sphere(ray, spheres[num_s], t_sphere, point, N, sphere_material, lights)) {
+        if (!cast_ray_object(ray, world_obj, world_obj.spheres[num_s], t_sphere, point, N, sphere_material)) {
             flags[num_s + 1] = 0;
             t_sphere = -1.0;
-            //sphere_material = Material(Vec2D(1, 0), Pixel(0., 0.78, 1.), 10.);
-            //return Pixel(0, 200, 255); // background color
         }
         materials.push_back(sphere_material);
         t_s.push_back(t_sphere);
@@ -205,9 +278,9 @@ Vec3D rotateVector(const Vec3D& vec, const Vec3D& rot)
     return new_vec;
 }
 
-void render(const std::vector<Sphere>& spheres, const Cube& cube, const Vec3D& camera, const Vec3D& rotation, const std::vector<Light>& lights) {
-    const int width = 768;
-    const int height = 768;
+void render(const WorldObjects& world_obj, const Vec3D& camera, const Vec3D& rotation) {
+    const int width = 1024;
+    const int height = 1024;
     Pixel* imageBuffer = new Pixel[width * height];
     Pixel_final *finalBuffer = new Pixel_final[width * height];
     Vec3D rotated_camera = rotateVector(camera, rotation);
@@ -224,9 +297,10 @@ void render(const std::vector<Sphere>& spheres, const Cube& cube, const Vec3D& c
             Vec3D dir = Vec3D((current_point.x - camera.x), (current_point.y - camera.y), (current_point.z - camera.z)).normalize();
             dir = rotateVector(dir, rotation);
             Ray ray = Ray(rotated_camera, dir);
-            imageBuffer[i + j * width] = cast_ray(ray, spheres, cube, lights);
+            imageBuffer[i + j * width] = cast_ray(ray, world_obj);
         }
     }
+    //std::vector<unsigned char> pixmap(width*height*3);
 
     for (size_t i = 0; i < height * width; ++i) {
         Pixel &c = imageBuffer[i];
@@ -234,30 +308,38 @@ void render(const std::vector<Sphere>& spheres, const Cube& cube, const Vec3D& c
         if (max > 1.) {
             c = c * (1. / max);
         }
+        // Гамма коорекция
+        // c.R = std::powf(c.R, 1. / 2.2);
+        // c.G = std::powf(c.G, 1. / 2.2);
+        // c.B = std::powf(c.B, 1. / 2.2);
+
+
+        // pixmap[i*3 + 0] = (unsigned char)(255 * std::max(0.f, std::min(1.f, imageBuffer[i].R)));
+        // pixmap[i*3 + 1] = (unsigned char)(255 * std::max(0.f, std::min(1.f, imageBuffer[i].G)));
+        // pixmap[i*3 + 2] = (unsigned char)(255 * std::max(0.f, std::min(1.f, imageBuffer[i].B)));
         finalBuffer[i] = Pixel_final(c.R * 255, c.G * 255, c.B * 255);
     }
     stbi_flip_vertically_on_write(0);
     stbi_write_png("../out.png", width, height, sizeof(Pixel_final), finalBuffer, sizeof(Pixel_final) * width);
-
-    std::ofstream ofs; // save the framebuffer to file
-    ofs.open("../out.ppm");
-    ofs << "P6\n" << width << " " << height << "\n255\n";
-    for (size_t i = 0; i < height*width; ++i) {
-        Pixel &c = imageBuffer[i];
-        float max = std::max(c.R, std::max(c.G, c.B));
-        if (max>1) c = c /max;
-        ofs << (char)(255 * std::max(0.f, std::min(1.f, imageBuffer[i].R)));
-        ofs << (char)(255 * std::max(0.f, std::min(1.f, imageBuffer[i].G)));
-        ofs << (char)(255 * std::max(0.f, std::min(1.f, imageBuffer[i].B)));
-    }
-    ofs.close();
 }
-
 
 int main()
 {
-    std::vector<Sphere> spheres;
-    std::vector<Light> lights;
+    int n = -1;
+    unsigned char *pixmap = stbi_load("../envmap.jpg", &envmap_width, &envmap_height, &n, 0);
+    if (!pixmap || 3!=n) {
+        std::cerr << "Error: can not load the environment map" << std::endl;
+        return -1;
+    }
+    envmap = std::vector<Pixel>(envmap_width*envmap_height);
+    for (int j = envmap_height-1; j>=0 ; j--) {
+        for (int i = 0; i<envmap_width; i++) {
+            envmap[i+j*envmap_width] = Pixel(pixmap[(i+j*envmap_width)*3+0], pixmap[(i+j*envmap_width)*3+1], pixmap[(i+j*envmap_width)*3+2])*(1/255.);
+        }
+    }
+    stbi_image_free(pixmap);
+
+    WorldObjects world_obj;
 
     Material ivory(Vec2D(0.6, 0.3), Pixel(0.4, 0.4, 0.3), 50.);
     Material red_rubber(Vec2D(0.9, 0.1), Pixel(0.3, 0.1, 0.1), 50.);
@@ -269,18 +351,25 @@ int main()
     Cube cube(Vec3D(0, 0, 0), 4, ivory); 
 
     Vec3D default_camera(0, 0, -50);
-    Vec3D rotation(30, 45, 0);
+    Vec3D rotation(30, 35, 0);
 
-    Light light1(Vec3D(0, -5, 0), 1.5);
-    Light light2(Vec3D(8, -6, 0), 1.);
-    Light light3(Vec3D(-25, -20, -50), 1.4);
+    Light light1(Vec3D(0, -6, 0), 1.2);
+    Light light2(Vec3D(10, -6, 1), 1);
+    Light light3(Vec3D(50, -20, -50), 1.2);
+    Light light4(Vec3D(100, -15 , 100), 1.8);
+    Light light5(Vec3D(5, -2, -6), 1);
 
-    spheres.push_back(sphere1);
-    spheres.push_back(sphere2);
+    world_obj.spheres.push_back(sphere1);
+    world_obj.spheres.push_back(sphere2);
 
-    lights.push_back(light1);
-    lights.push_back(light2);
-    lights.push_back(light3);
-    render(spheres, cube, default_camera, rotation, lights);
+    world_obj.cubes.push_back(cube);
+
+    world_obj.lights.push_back(light1);
+    //world_obj.lights.push_back(light2);
+    world_obj.lights.push_back(light3);
+    world_obj.lights.push_back(light4);
+    //world_obj.lights.push_back(light5);
+
+    render(world_obj, default_camera, rotation);
     return 0;
 }

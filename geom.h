@@ -31,6 +31,7 @@ struct Vec3D
     Vec3D(const float& x_, const float& y_, const float& z_) : x(x_), y(y_), z(z_) {}
     float norm();
     Vec3D normalize();
+    double length_squared() const;
     float x;
     float y;
     float z;
@@ -95,6 +96,10 @@ Vec3D operator*(const Vec3D& l_v, float c)
 float operator*(const Vec3D& l_v, const Vec3D& r_v) {
     float ret = l_v.x * r_v.x + l_v.y * r_v.y + l_v.z * r_v.z;
     return ret;
+}
+
+double Vec3D::length_squared() const {
+    return x * x + y * y + z * z;
 }
 
 float Vec3D::norm() {
@@ -257,18 +262,27 @@ struct Sphere {
     Material material;
 
     Sphere(const Vec3D &c_, const float &r_, const Material &m_) : center(c_), radius(r_), material(m_) {}
-    bool ray_intersect(const Vec3D&, const Vec3D&, float&) const; 
+    bool ray_intersect(const Ray&, float&) const; 
+    Vec3D normInPoint(const Vec3D&) const;
 };
 
-bool Sphere::ray_intersect(const Vec3D &orig, const Vec3D &dir, float &t) const 
+Vec3D Sphere::normInPoint(const Vec3D& point) const
 {
-    Vec3D oc = orig - center;
-    float a = dot(dir, dir);
-    float b = 2.0 * dot(oc, dir);
-    float c = dot(oc,oc) - radius*radius;
-    float discriminant = b*b - 4*a*c;
-    t = (- b - sqrt(discriminant)) / (2.0*a);
-    return (discriminant > 0);
+    return (point - center).normalize();
+}
+
+bool Sphere::ray_intersect(const Ray& ray, float &t) const 
+{
+    Vec3D L = center - ray.orig;
+    float tca = L*ray.dir;
+    float d2 = dot(L, L) - tca*tca;
+    if (d2 > radius*radius) return false;
+    float thc = sqrtf(radius*radius - d2);
+    t = tca - thc;
+    float t1 = tca + thc;
+    if (t < 0) t = t1;
+    if (t < 0) return false;
+    return true;
 }
 
 bool equals(const float& a, const float& b) {
@@ -419,5 +433,12 @@ float dot(const Vec3D& a, const Vec3D &b)
 {   
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
+
+struct WorldObjects
+{
+    std::vector<Sphere> spheres;
+    std::vector<Light> lights;
+    std::vector<Cube> cubes;
+};
 
 #endif //__TEMPLATES_H__
