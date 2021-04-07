@@ -39,11 +39,7 @@ struct Vec3D
 
 struct Pixel
 {
-    Pixel(){
-        R = 0.;
-        G = 0.;
-        B = 0.;
-    }
+    Pixel(){}
     Pixel(const float& r_, const float& g_, const float& b_) : R(r_), G(g_), B(b_) {}
     float R;
     float G;
@@ -51,9 +47,9 @@ struct Pixel
 };
 
 struct Material {
-    Material(const Vec2D& a_, const Pixel& c_, const float &s_) : albedo(a_), diffuse_color(c_), specular_exponent(s_) {}
-    Material() : albedo(1, 0), diffuse_color(), specular_exponent() {}
-    Vec2D albedo;
+    Material(const Vec3D& a_, const Pixel& c_, const float &s_) : albedo(a_), diffuse_color(c_), specular_exponent(s_) {}
+    Material() : albedo(1, 0, 0), diffuse_color(), specular_exponent() {}
+    Vec3D albedo;
     Pixel diffuse_color;
     float specular_exponent;
 };
@@ -131,27 +127,8 @@ Pixel operator*(const Pixel& l_v, float c)
     r = l_v.R * c;
     g = l_v.G * c;
     b = l_v.B * c;
-    /*
-    if (int(l_v.R) * c > 255) {
-        r = 255;
-    } else {
-        r = float(l_v.R * c);
-    }
-
-    if (int(l_v.G) * c > 255) {
-        g = 255;
-    } else {
-        g = float(l_v.G * c);
-    }
-
-    if (int(l_v.B) * c > 255) {
-        b = 255;
-    } else {
-        b = float(l_v.B * c);
-    }
-    */
     
-    return Pixel(r, g , b);
+    return Pixel(r, g, b);
 }
 
 Pixel operator+(const Pixel& l_v, const Pixel& r_v)
@@ -160,26 +137,18 @@ Pixel operator+(const Pixel& l_v, const Pixel& r_v)
     r = l_v.R + r_v.R;
     g = l_v.G * r_v.G;
     b = l_v.B + r_v.B;
-    /*
-    if (int(l_v.R) + int(r_v.R) > 255) {
-        r = 255;
-    } else {
-        r = l_v.R + r_v.R;
-    }
-
-    if (int(l_v.G) + int(r_v.G) > 255) {
-        g = 255;
-    } else {
-        g = l_v.G * r_v.G;
-    }
-
-    if (int(l_v.B) + int(r_v.B) > 255) {
-        b = 255;
-    } else {
-        b = l_v.B + r_v.B;
-    }*/
     
-    return Pixel(r, g , b);
+    return Pixel(r, g, b);
+}
+
+Pixel operator+(const Pixel& l_v, float c)
+{
+    float r, g, b;
+    r = l_v.R + c;
+    g = l_v.G * c;
+    b = l_v.B + c;
+    
+    return Pixel(r, g, b);
 }
 
 Pixel operator/(const Pixel& l_v, float c)
@@ -240,15 +209,9 @@ struct Cube
         bounds[0] = vertices[4]; 
         bounds[1] = vertices[2]; 
     } 
-
-    // Cube(const Vec3D &b0, const Vec3D &b1) { 
-    //     bounds[0] = b0; 
-    //     bounds[1] = b1; 
-    //     center = Vec3D((b0.x + b1.x) / 2., (b0.y + b1.y) / 2., (b0.z + b1.z) / 2.);
-    // } 
     std::vector<Vec3D> vertices;
     std::vector<Vec3D> norms;
-    bool ray_intersect(const Ray&, float&) const;
+    bool ray_intersect(const Ray&, float&);
     Vec3D normInPoint(const Vec3D&) const;
     Vec3D bounds[2]; 
     Vec3D center;
@@ -262,16 +225,73 @@ struct Sphere {
     Material material;
 
     Sphere(const Vec3D &c_, const float &r_, const Material &m_) : center(c_), radius(r_), material(m_) {}
-    bool ray_intersect(const Ray&, float&) const; 
+    bool ray_intersect(const Ray&, float&); 
     Vec3D normInPoint(const Vec3D&) const;
 };
+
+struct Surface 
+{
+    Surface(const float& y_, const float& size_, const Material &m1_, const Material &m2_) : y(y_), q_size(size_), material1(m1_), material2(m2_) {
+        material = material1;
+    }
+    float y, q_size;
+    Material material1, material2;
+    Material material;
+    bool ray_intersect(const Ray&, float&);
+    Vec3D normInPoint(const Vec3D&) const;
+};
+
+bool Surface::ray_intersect(const Ray& ray, float &t)
+{
+    Vec3D N(0, -1, 0);
+    Vec3D planePoint(0, y, 0);
+    // float denom = dot(n, ray.dir); 
+    // if (denom > 1e-6) { 
+    //     Vec3D p0l0 = planePoint - ray.orig; 
+    //     t = dot(p0l0, n) / denom; 
+    //     return (t >= 0); 
+    // } 
+    // return false; 
+
+    Vec3D diff = ray.orig - planePoint;
+	double prod1 = dot(diff, N);
+	double prod2 = dot(-ray.dir, N);
+    //std::cout << ray.dir << "          " << N << std::endl;
+    if (prod2 > 0.00001) {
+        double prod3 = prod1 / prod2;
+        t = prod3;
+        Vec3D point = ray.orig + ray.dir * prod3;
+        //std::cout << ray.orig + ray.dir * prod3 << std::endl;
+        int a = 0;
+        int n_x = int (point.x / q_size) + 1;
+        int n_z = int (point.z / q_size) + 1;
+        if (point.x < 0 && point.z >= 0 || point.x > 0 && point.z < 0) {
+            a = 1;
+        }
+        if (((n_x + n_z + a) & 1) == 0) {
+            material = material1;
+        } else {
+            material = material2;
+        }
+	    return true;
+    }
+    return false;
+	
+}
+
+
+
+Vec3D Surface::normInPoint(const Vec3D& point) const
+{
+    return Vec3D(0, -1, 0);
+}
 
 Vec3D Sphere::normInPoint(const Vec3D& point) const
 {
     return (point - center).normalize();
 }
 
-bool Sphere::ray_intersect(const Ray& ray, float &t) const 
+bool Sphere::ray_intersect(const Ray& ray, float &t) 
 {
     Vec3D L = center - ray.orig;
     float tca = L*ray.dir;
@@ -286,58 +306,14 @@ bool Sphere::ray_intersect(const Ray& ray, float &t) const
 }
 
 bool equals(const float& a, const float& b) {
-    //std::cout << a << " VS " << b << std::endl;
     if (fabs(a - b) < 0.001) {
-        //std::cout << a << " VS " << b << "==" << fabs(a - b) <<  " true" << std::endl;
         return true;
     }
-    //std::cout << a << " VS " << b << "==" << fabs(a - b) <<  " false" << std::endl;
     return false;
 }
 
 Vec3D Cube::normInPoint(const Vec3D& point) const
 {
-    //int i1 = 0, i2 = 1, i3 = 2, i4 = 3;
-    //float d, d1, d2, d3, d4;
-    // d1 = std::sqrt(std::pow(vertices[0].x - point.x, 2) + std::pow(vertices[0].y - point.y, 2) + std::pow(vertices[0].z - point.z, 2));
-    // d2 = std::sqrt(std::pow(vertices[1].x - point.x, 2) + std::pow(vertices[1].y - point.y, 2) + std::pow(vertices[1].z - point.z, 2));
-    // d3 = std::sqrt(std::pow(vertices[2].x - point.x, 2) + std::pow(vertices[2].y - point.y, 2) + std::pow(vertices[2].z - point.z, 2));
-    // d4 = std::sqrt(std::pow(vertices[3].x - point.x, 2) + std::pow(vertices[3].y - point.y, 2) + std::pow(vertices[3].z - point.z, 2));
-    // for (int i = 4; i < 8; ++i) {
-    //     d = std::sqrt(std::pow(vertices[i].x - point.x, 2) + std::pow(vertices[i].y - point.y, 2) + std::pow(vertices[i].z - point.z, 2));
-    //     if (d < d1) {
-    //         d4 = d3;
-    //         d3 = d2;
-    //         d2 = d1;
-    //         d1 = d;
-    //         i4 = i3;
-    //         i3 = i2;
-    //         i2 = i1;
-    //         i1 = i;
-    //     } else if (d < d2) {
-    //         d4 = d3;
-    //         d3 = d2;
-    //         d2 = d;
-    //         i4 = i3;
-    //         i3 = i2;
-    //         i2 = i;
-    //     } else if (d < d3) {
-    //         d4 = d3;
-    //         d3 = d;
-    //         i4 = i3;
-    //         i3 = i;
-    //     } else if (d < d4) {
-    //         d4 = d;
-    //         i4 = i;
-    //     }
-    // }
-    
-    //std::cout << std::endl << "This " << point << std::endl;
-    // std::cout << vertices[0].z << std::endl;
-    // std::cout << vertices[3].z << std::endl;
-    // std::cout << vertices[4].z << std::endl;
-    // std::cout << vertices[7].z << std::endl;
-
     if (equals(point.z, vertices[0].z) && equals(point.z, vertices[3].z) && 
             equals(point.z, vertices[4].z) && equals(point.z, vertices[7].z)) {
         return norms[0];
@@ -346,7 +322,6 @@ Vec3D Cube::normInPoint(const Vec3D& point) const
             equals(point.x, vertices[4].x) && equals(point.x, vertices[5].x)) {
         return norms[1];
     }
-    //std::cout << "============" << std::endl;
     if (equals(point.z, vertices[1].z) && equals(point.z, vertices[2].z) && 
             equals(point.z, vertices[5].z) && equals(point.z, vertices[6].z)) {
         return norms[2];
@@ -379,17 +354,14 @@ Vec3D Cube::normInPoint(const Vec3D& point) const
     std::cout << norms[6] << std::endl;
 }
 
-bool Cube::ray_intersect(const Ray& r, float& t) const 
+bool Cube::ray_intersect(const Ray& r, float& t) 
 { 
     float tmin, tmax, tymin, tymax, tzmin, tzmax; 
-    //t = std::numeric_limits<float>::max();
-
     tmin = (bounds[r.sign[0]].x - r.orig.x) * r.invdir.x; 
     tmax = (bounds[1-r.sign[0]].x - r.orig.x) * r.invdir.x; 
     tymin = (bounds[r.sign[1]].y - r.orig.y) * r.invdir.y; 
     tymax = (bounds[1-r.sign[1]].y - r.orig.y) * r.invdir.y; 
 
-    //std::cout << "|||||||| " << tmin << " " << tmax << std::endl;
     if ((tmin > tymax) || (tymin > tmax)) 
         return false; 
 
@@ -439,6 +411,7 @@ struct WorldObjects
     std::vector<Sphere> spheres;
     std::vector<Light> lights;
     std::vector<Cube> cubes;
+    std::vector<Surface> surfaces;
 };
 
 #endif //__TEMPLATES_H__

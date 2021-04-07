@@ -24,13 +24,14 @@ float cosinus(const Vec3D& a, const Vec3D& b)
 }
 
 template <typename Object>
-bool scene_intersect(const Ray& ray, const Object &obj, float &dist_i, Vec3D& point, Vec3D& N, Material &material) {
+bool scene_intersect(const Ray& ray, Object &obj, float &dist_i, Vec3D& point, Vec3D& N, Material &material) {
     float obj_dist = std::numeric_limits<float>::max();
     if (obj.ray_intersect(ray, dist_i)) {
         obj_dist = dist_i;
         point = ray.orig + ray.dir * dist_i;
         N = obj.normInPoint(point);
         material = obj.material;
+        //std::cout << material.diffuse_color << std::endl;
     }
     return obj_dist < 10000;
     // float checkerboard_dist = std::numeric_limits<float>::max();
@@ -50,10 +51,11 @@ bool scene_intersect(const Ray& ray, const Object &obj, float &dist_i, Vec3D& po
 }
 
 template <typename Object>
-bool cast_ray_object(const Ray& ray, const WorldObjects& world_obj, const Object &obj, float &dist_i, Vec3D& point, Vec3D& N, Material &material)
+bool cast_ray_object(const Ray& ray, WorldObjects& world_obj, Object &obj, float &dist_i, Vec3D& point, Vec3D& N, Material &material)
 {
     if(scene_intersect(ray, obj, dist_i, point, N, material)) {
-        float diffuse_light_intensity = 0.5;
+        //std::cout << "!" << std::endl;
+        float diffuse_light_intensity = 0.3;
         float specular_light_intensity = 0;
         for (int i = 0; i < int(world_obj.lights.size()); ++i) {
             Vec3D light_dir = (world_obj.lights[i].position - point).normalize();
@@ -95,7 +97,8 @@ bool cast_ray_object(const Ray& ray, const WorldObjects& world_obj, const Object
                 specular_light_intensity += powf(std::max(0.f, dot(reflect(light_dir, N), -ray.dir)), material.specular_exponent) * world_obj.lights[i].intensity;
             }  
         }
-        material.diffuse_color = material.diffuse_color * diffuse_light_intensity * material.albedo.x + Pixel(1., 1., 1.) * specular_light_intensity * material.albedo.y;;
+        Pixel pix(1., 1., 1.);
+        material.diffuse_color = material.diffuse_color * diffuse_light_intensity * material.albedo.x + specular_light_intensity * material.albedo.y;;
         return true;
     }
     return false;
@@ -164,28 +167,40 @@ bool cast_ray_cube(const Ray& ray, const Cube &cube, float& t, Vec3D& point, Vec
 }
 */
 
-Pixel cast_ray(const Ray& ray, const WorldObjects& world_obj)
+Pixel cast_ray(const Ray& ray, WorldObjects& world_obj, size_t depth)
 {
     Vec3D point, N;
     std::vector<int> flags;
-    for (int i = 0; i < int(world_obj.spheres.size()) + 1; ++i) flags.push_back(1);
+    for (int i = 0; i < int(world_obj.spheres.size()) + 2; ++i) flags.push_back(1);
     std::vector<float> t_s;
     std::vector<Material> materials;
 
     float t_cube = std::numeric_limits<float>::max();
     Material cube_material;
-    if (!cast_ray_object(ray, world_obj, world_obj.cubes[0], t_cube, point, N, cube_material)) {
+    if (depth > 4 || !cast_ray_object(ray, world_obj, world_obj.cubes[0], t_cube, point, N, cube_material)) {
         flags[0] = 0;
         t_cube = -1.0;
     }
     materials.push_back(cube_material);
     t_s.push_back(t_cube);
 
+    float t_surface = std::numeric_limits<float>::max();
+    Material surface_material;
+    if (depth > 4 || !cast_ray_object(ray, world_obj, world_obj.surfaces[0], t_surface, point, N, surface_material)) {
+        //std::cout << "@" << std::endl;
+        flags[1] = 0;
+        t_surface = -1.0;
+    }
+    //flags[1] = 0;
+    //std::cout << surface_material.diffuse_color << std::endl;
+    materials.push_back(surface_material);
+    t_s.push_back(t_surface);
+
     for (int num_s = 0; num_s < int(world_obj.spheres.size()); ++num_s) {
         float t_sphere = std::numeric_limits<float>::max();
         Material sphere_material;
-        if (!cast_ray_object(ray, world_obj, world_obj.spheres[num_s], t_sphere, point, N, sphere_material)) {
-            flags[num_s + 1] = 0;
+        if (depth > 4 || !cast_ray_object(ray, world_obj, world_obj.spheres[num_s], t_sphere, point, N, sphere_material)) {
+            flags[num_s + 2] = 0;
             t_sphere = -1.0;
         }
         materials.push_back(sphere_material);
@@ -201,6 +216,9 @@ Pixel cast_ray(const Ray& ray, const WorldObjects& world_obj)
             }
         }
     }
+
+    Vec3f reflect_dir = reflect(dir, N).normalize();
+
     if (i_tmp == -1) {
         return Pixel(0., 0.78, 1.);
     }
@@ -278,7 +296,7 @@ Vec3D rotateVector(const Vec3D& vec, const Vec3D& rot)
     return new_vec;
 }
 
-void render(const WorldObjects& world_obj, const Vec3D& camera, const Vec3D& rotation) {
+void render(WorldObjects& world_obj, const Vec3D& camera, const Vec3D& rotation) {
     const int width = 1024;
     const int height = 1024;
     Pixel* imageBuffer = new Pixel[width * height];
@@ -297,27 +315,27 @@ void render(const WorldObjects& world_obj, const Vec3D& camera, const Vec3D& rot
             Vec3D dir = Vec3D((current_point.x - camera.x), (current_point.y - camera.y), (current_point.z - camera.z)).normalize();
             dir = rotateVector(dir, rotation);
             Ray ray = Ray(rotated_camera, dir);
-            imageBuffer[i + j * width] = cast_ray(ray, world_obj);
+            imageBuffer[i + j * width] = cast_ray(ray, world_obj, 0);
         }
     }
     //std::vector<unsigned char> pixmap(width*height*3);
 
     for (size_t i = 0; i < height * width; ++i) {
-        Pixel &c = imageBuffer[i];
-        float max = std::max(c.R, std::max(c.G, c.B));
+        //Pixel &c = imageBuffer[i];
+        float max = std::max(imageBuffer[i].R, std::max(imageBuffer[i].G, imageBuffer[i].B));
         if (max > 1.) {
-            c = c * (1. / max);
+            imageBuffer[i] = imageBuffer[i] / max;
         }
-        // Гамма коорекция
-        // c.R = std::powf(c.R, 1. / 2.2);
-        // c.G = std::powf(c.G, 1. / 2.2);
-        // c.B = std::powf(c.B, 1. / 2.2);
+        //Гамма коорекция
+        imageBuffer[i].R = std::powf(imageBuffer[i].R, 1. / 2.2);
+        imageBuffer[i].G = std::powf(imageBuffer[i].G, 1. / 2.2);
+        imageBuffer[i].B = std::powf(imageBuffer[i].B, 1. / 2.2);
 
 
         // pixmap[i*3 + 0] = (unsigned char)(255 * std::max(0.f, std::min(1.f, imageBuffer[i].R)));
         // pixmap[i*3 + 1] = (unsigned char)(255 * std::max(0.f, std::min(1.f, imageBuffer[i].G)));
         // pixmap[i*3 + 2] = (unsigned char)(255 * std::max(0.f, std::min(1.f, imageBuffer[i].B)));
-        finalBuffer[i] = Pixel_final(c.R * 255, c.G * 255, c.B * 255);
+        finalBuffer[i] = Pixel_final(imageBuffer[i].R * 255, imageBuffer[i].G * 255, imageBuffer[i].B * 255);
     }
     stbi_flip_vertically_on_write(0);
     stbi_write_png("../out.png", width, height, sizeof(Pixel_final), finalBuffer, sizeof(Pixel_final) * width);
@@ -325,33 +343,25 @@ void render(const WorldObjects& world_obj, const Vec3D& camera, const Vec3D& rot
 
 int main()
 {
-    int n = -1;
-    unsigned char *pixmap = stbi_load("../envmap.jpg", &envmap_width, &envmap_height, &n, 0);
-    if (!pixmap || 3!=n) {
-        std::cerr << "Error: can not load the environment map" << std::endl;
-        return -1;
-    }
-    envmap = std::vector<Pixel>(envmap_width*envmap_height);
-    for (int j = envmap_height-1; j>=0 ; j--) {
-        for (int i = 0; i<envmap_width; i++) {
-            envmap[i+j*envmap_width] = Pixel(pixmap[(i+j*envmap_width)*3+0], pixmap[(i+j*envmap_width)*3+1], pixmap[(i+j*envmap_width)*3+2])*(1/255.);
-        }
-    }
-    stbi_image_free(pixmap);
-
     WorldObjects world_obj;
 
-    Material ivory(Vec2D(0.6, 0.3), Pixel(0.4, 0.4, 0.3), 50.);
-    Material red_rubber(Vec2D(0.9, 0.1), Pixel(0.3, 0.1, 0.1), 50.);
-    Material dark_orchid(Vec2D(0.9, 0.5), Pixel(0.6, 0.19, 0.8), 50.);
+    Material ivory(Vec3D(0.6, 0.3, 0.), Pixel(0.4, 0.4, 0.3), 50.);
+    Material red_rubber(Vec3D(0.9, 0.1, 0.), Pixel(0.3, 0.1, 0.1), 50.);
+    Material dark_orchid(Vec3D(0.9, 0.5, 0.), Pixel(0.6, 0.19, 0.8), 50.);
+
+    Material dark_gray(Vec3D(0.9, 0.1, 0.), Pixel(0.1, 0.4, 0.22), 50.);
+    Material light_gray(Vec3D(0.9, 0.1, 0.), Pixel(0.15, 1., 0.34), 50.);
     
+    Material mirror(Vec3D(0.0, 10.0, 0.8), Pixel(1.0, 1.0, 1.0), 1425.);
+
+    Surface surface(4, 1.5, dark_gray, light_gray);
 
     Sphere sphere1(Vec3D(5, -6 , 5), 2, ivory);
     Sphere sphere2(Vec3D(0, -6 , 6), 2, red_rubber);
     Cube cube(Vec3D(0, 0, 0), 4, ivory); 
 
     Vec3D default_camera(0, 0, -50);
-    Vec3D rotation(30, 35, 0);
+    Vec3D rotation(10, 35, 0);
 
     Light light1(Vec3D(0, -6, 0), 1.2);
     Light light2(Vec3D(10, -6, 1), 1);
@@ -359,13 +369,15 @@ int main()
     Light light4(Vec3D(100, -15 , 100), 1.8);
     Light light5(Vec3D(5, -2, -6), 1);
 
+    world_obj.surfaces.push_back(surface);
+
     world_obj.spheres.push_back(sphere1);
     world_obj.spheres.push_back(sphere2);
 
     world_obj.cubes.push_back(cube);
 
     world_obj.lights.push_back(light1);
-    //world_obj.lights.push_back(light2);
+    world_obj.lights.push_back(light2);
     world_obj.lights.push_back(light3);
     world_obj.lights.push_back(light4);
     //world_obj.lights.push_back(light5);
