@@ -4,21 +4,25 @@
 struct Pixel_final
 {
     Pixel_final(){}
-    Pixel_final(const uint8_t& r_, const uint8_t& g_, const uint8_t& b_) : R(r_), G(g_), B(b_) {}
-    uint8_t R;
-    uint8_t G;
-    uint8_t B;
+    Pixel_final(const char& r_, const char& g_, const char& b_) : R(r_), G(g_), B(b_) {}
+    char R;
+    char G;
+    char B;
 };
 
-struct Vec2D
+struct Vec4D
 {
-    Vec2D() {
+    Vec4D() {
         x = 0.;
         y = 0.;
+        z = 0.;
+        a = 0.;
     }
-    Vec2D(const float& x_, const float& y_) : x(x_), y(y_) {}
+    Vec4D(const float& x_, const float& y_, const float& z_, const float& a_) : x(x_), y(y_), z(z_), a(a_) {}
     float x;
     float y;
+    float z;
+    float a;
 };
 
 struct Vec3D
@@ -47,9 +51,10 @@ struct Pixel
 };
 
 struct Material {
-    Material(const Vec3D& a_, const Pixel& c_, const float &s_) : albedo(a_), diffuse_color(c_), specular_exponent(s_) {}
-    Material() : albedo(1, 0, 0), diffuse_color(), specular_exponent() {}
-    Vec3D albedo;
+    Material(const float &r_, const Vec4D& a_, const Pixel& c_, const float &s_) : albedo(a_), diffuse_color(c_), specular_exponent(s_) {}
+    Material() : refractive_index(1), albedo(1, 0, 0, 0), diffuse_color(), specular_exponent() {}
+    float refractive_index;
+    Vec4D albedo;
     Pixel diffuse_color;
     float specular_exponent;
 };
@@ -135,7 +140,7 @@ Pixel operator+(const Pixel& l_v, const Pixel& r_v)
 {
     float r, g, b;
     r = l_v.R + r_v.R;
-    g = l_v.G * r_v.G;
+    g = l_v.G + r_v.G;
     b = l_v.B + r_v.B;
     
     return Pixel(r, g, b);
@@ -145,7 +150,7 @@ Pixel operator+(const Pixel& l_v, float c)
 {
     float r, g, b;
     r = l_v.R + c;
-    g = l_v.G * c;
+    g = l_v.G + c;
     b = l_v.B + c;
     
     return Pixel(r, g, b);
@@ -245,20 +250,13 @@ bool Surface::ray_intersect(const Ray& ray, float &t)
 {
     Vec3D N(0, -1, 0);
     Vec3D planePoint(0, y, 0);
-    // float denom = dot(n, ray.dir); 
-    // if (denom > 1e-6) { 
-    //     Vec3D p0l0 = planePoint - ray.orig; 
-    //     t = dot(p0l0, n) / denom; 
-    //     return (t >= 0); 
-    // } 
-    // return false; 
 
     Vec3D diff = ray.orig - planePoint;
-	double prod1 = dot(diff, N);
-	double prod2 = dot(-ray.dir, N);
+	float prod1 = dot(diff, N);
+	float prod2 = dot(-ray.dir, N);
     //std::cout << ray.dir << "          " << N << std::endl;
     if (prod2 > 0.00001) {
-        double prod3 = prod1 / prod2;
+        float prod3 = prod1 / prod2;
         t = prod3;
         Vec3D point = ray.orig + ray.dir * prod3;
         //std::cout << ray.orig + ray.dir * prod3 << std::endl;
@@ -406,12 +404,158 @@ float dot(const Vec3D& a, const Vec3D &b)
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+
+
+struct Cone
+{
+    Cone(){}
+    Cone(const Vec3D& c_, const float& r_, const float& h_, const Material& m1_, const Material& m2_) : material1(m1_), material2(m2_), center(c_), radius(r_), height(h_) {}
+    bool ray_intersect(const Ray&, float&);
+    Vec3D normInPoint(const Vec3D&) const;
+    Vec3D center;
+    float radius;
+    float height;
+    Material material;
+    Material material1, material2;;
+};
+
+bool intersectPlane(const Ray& ray, const Vec3D &N, const Vec3D &p0, float &t) 
+{ 
+    Vec3D diff = ray.orig - p0;
+	float prod1 = dot(diff, N);
+	float prod2 = dot(-ray.dir, N);
+    //std::cout << ray.dir << "          " << N << std::endl;
+    if (prod2 > 0.00001) {
+        float prod3 = prod1 / prod2;
+        t = prod3;
+        //Vec3D point = ray.orig + ray.dir * prod3;
+        return true;
+    } 
+    return false; 
+} 
+
+bool intersectDisk(const Ray& ray, const Vec3D &p0, const float &radius, float& t) 
+{ 
+    Vec3D N(0, -1, 0);
+    if (intersectPlane(ray, N, p0, t)) { 
+        Vec3D p = ray.orig + ray.dir * t; 
+        Vec3D v = p - p0; 
+        float d2 = dot(v, v); 
+        return (sqrtf(d2) <= radius); 
+     } 
+ 
+     return false; 
+}
+
+Vec3D Cone::normInPoint(const Vec3D& point) const
+{
+    // float r = sqrt((point.x-center.x)*(point.x-center.x) + (point.y-center.y)*(point.y-center.y));
+    // return Vec3D(point.x-center.x, r*(radius / height), point.y-center.y).normalize();
+    //return Vec3D(point.x - center.x, 0, point.z - center.z).normalize();
+    //std::cout << point << std::endl;
+    if (point.y < height - 0.001 + center.y && point.y > -height + 0.001 + center.y) {
+        return Vec3D(point.x - center.x, 0, point.z - center.z).normalize();
+    } else if (point.y == -height + center.y) {
+        return Vec3D(0, -1, 0);
+    }
+    //return Vec3D(0, 1, 0);
+}
+
+bool Cone::ray_intersect(const Ray& ray, float& t)
+{
+    
+    // float A = ray.orig.x - center.x;
+    // float B = ray.orig.y - center.y;
+    // float D = height - ray.orig.z + center.z;
+    // float tan = (radius / height) * (radius / height);
+    // float a = (ray.dir.x * ray.dir.x) + (ray.dir.y * ray.dir.y) - (tan*(ray.dir.z * ray.dir.z));
+    // float b = (2*A*ray.dir.x) + (2*B*ray.dir.y) + (2*tan*D*ray.dir.z);
+    // float c = (A*A) + (B*B) - (tan*(D*D));
+    // float delta = b*b - 4*(a*c);
+	// if(fabs(delta) < 0.001) return false; 
+    // if(delta < 0.0) return false;
+    // float t1 = (-b - sqrt(delta))/(2*a);
+    // float t2 = (-b + sqrt(delta))/(2*a);
+    // if (t1>t2) t = t2;
+    // else t = t1;
+    // float r = ray.orig.z + t*ray.dir.z;
+    // if ((r > center.z) and (r < center.z + height)) return true;
+    // else return false;
+
+    // float a = (ray.dir.x * ray.dir.x) + (ray.dir.z * ray.dir.z);
+    // float b = 2 * (ray.dir.x * (ray.orig.x - center.x) + ray.dir.z * (ray.orig.z - center.z));
+    // float c = (ray.orig.x - center.x) * (ray.orig.x - center.x) + (ray.orig.z - center.z) * (ray.orig.z - center.z) - radius * radius;
+    // float delta = b*b - 4*(a*c);
+	// if(fabs(delta) < 0.0001) return false; 
+    // if(delta < 0.0) return false;
+    // float t1 = (-b - std::sqrt(delta))/(2*a);
+    // float t2 = (-b + std::sqrt(delta))/(2*a);
+    // if (t1 > t2) t = t2;
+    // else t = t1;
+    // std::cout << t << std::endl;
+    // float r = ray.orig.y + t * ray.dir.y;
+    // if ((r <= center.y) && (r >= center.y - height))return true;
+    // else return false;
+    // определяет предполагаемое положение пересечения (начало луча - центр цилиндра)
+    
+    // float EPS = 0.001;
+    // Vec3D intersectionPoint = ray.orig - center;
+    // bool isBelongToCylinderBase = false;
+    // float ts1 = (height - ray.orig.y + center.y) / ray.dir.y;
+    // Vec3D point = intersectionPoint + ray.dir * ts1;
+    // if (point.x * point.x + point.z * point.z < radius * radius) {
+    //     isBelongToCylinderBase = true;
+    // }
+    // float ts2 = (-height - ray.orig.y + center.y) / ray.dir.y;
+    // point = intersectionPoint + ray.dir * ts2;
+    // if (point.x * point.x + point.z * point.z < radius * radius) {
+    //     isBelongToCylinderBase = true;
+    // }
+    material = material1;
+    bool isBelongToCylinderBase = intersectDisk(ray, Vec3D(center.x, center.y - height, center.z), radius, t);
+    if (isBelongToCylinderBase) {
+        //std::cout << "!" << std::endl;
+        material = material2;
+        return true;
+    }
+
+    // определяет принадлежность пересечения цилиндру путем вычисления корня уравнения
+    float a = ray.dir.x * ray.dir.x + ray.dir.z * ray.dir.z;
+    float b = ray.orig.x * ray.dir.x - ray.dir.x * center.x + ray.orig.z * ray.dir.z - ray.dir.z * center.z;
+    float c = ray.orig.x * ray.orig.x + center.x * center.x + ray.orig.z * ray.orig.z + center.z * center.z -
+            2 * (ray.orig.x * center.x + ray.orig.z * center.z) - radius * radius;
+
+    float discriminant = b * b - a * c;
+
+    // если дискриминант меньше нуля, то пересечения с лучом нет и  t - бесконечность 
+    if (discriminant < 0)
+    {
+        t = std::numeric_limits<float>::max();
+        return false;
+    }
+
+    // вычисляет корни уравнения      
+    float t1 = (-b - std::sqrtf(discriminant)) / a;
+    float t2 = (-b + std::sqrtf(discriminant)) / a;
+
+    // если корень меньше нуля, то пересечения с лучом нет 
+    t = t1;
+    if (t1 < 0)
+        t = t2;
+    //
+    if (fabs(ray.orig.y + t * ray.dir.y - center.y) < height)  {
+        return t > 0;
+    }
+    return false;
+}
+
 struct WorldObjects
 {
     std::vector<Sphere> spheres;
     std::vector<Light> lights;
     std::vector<Cube> cubes;
     std::vector<Surface> surfaces;
+    std::vector<Cone> cones;
 };
 
 #endif //__TEMPLATES_H__
