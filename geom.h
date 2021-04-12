@@ -1,6 +1,8 @@
 #ifndef __TEMPLATES_H__
 #define __TEMPLATES_H__
 
+bool cube_intersect_bottom = false;
+
 struct Pixel_final
 {
     Pixel_final(){}
@@ -35,7 +37,7 @@ struct Vec3D
     Vec3D(const float& x_, const float& y_, const float& z_) : x(x_), y(y_), z(z_) {}
     float norm();
     Vec3D normalize();
-    double length_squared() const;
+    float length_squared() const;
     float x;
     float y;
     float z;
@@ -51,7 +53,7 @@ struct Pixel
 };
 
 struct Material {
-    Material(const float &r_, const Vec4D& a_, const Pixel& c_, const float &s_) : albedo(a_), diffuse_color(c_), specular_exponent(s_) {}
+    Material(const float &r_, const Vec4D& a_, const Pixel& c_, const float &s_) : refractive_index(r_), albedo(a_), diffuse_color(c_), specular_exponent(s_) {}
     Material() : refractive_index(1), albedo(1, 0, 0, 0), diffuse_color(), specular_exponent() {}
     float refractive_index;
     Vec4D albedo;
@@ -70,7 +72,7 @@ Vec3D operator-(const Vec3D& l_v, const Vec3D& r_v)
     return Vec3D(x, y, z);
 }
 
-Vec3D operator-(const Vec3D& l_v)
+Vec3D operator-(const Vec3D l_v)
 {
     float x = -l_v.x;
     float y = -l_v.y;
@@ -99,7 +101,7 @@ float operator*(const Vec3D& l_v, const Vec3D& r_v) {
     return ret;
 }
 
-double Vec3D::length_squared() const {
+float Vec3D::length_squared() const {
     return x * x + y * y + z * z;
 }
 
@@ -354,6 +356,7 @@ Vec3D Cube::normInPoint(const Vec3D& point) const
 
 bool Cube::ray_intersect(const Ray& r, float& t) 
 { 
+    cube_intersect_bottom = false;
     float tmin, tmax, tymin, tymax, tzmin, tzmax; 
     tmin = (bounds[r.sign[0]].x - r.orig.x) * r.invdir.x; 
     tmax = (bounds[1-r.sign[0]].x - r.orig.x) * r.invdir.x; 
@@ -370,7 +373,7 @@ bool Cube::ray_intersect(const Ray& r, float& t)
 
     tzmin = (bounds[r.sign[2]].z - r.orig.z) * r.invdir.z; 
     tzmax = (bounds[1-r.sign[2]].z - r.orig.z) * r.invdir.z; 
-
+    //std::cout << tymin << " " << tymax << std::endl;
     if ((tmin > tzmax) || (tzmin > tmax)) 
         return false; 
 
@@ -385,6 +388,10 @@ bool Cube::ray_intersect(const Ray& r, float& t)
         t = tmax; 
         if (t < 0) return false; 
     } 
+    //std::cout << r.orig + r.dir * t << std::endl;
+    if (fabs((r.orig + r.dir * t).y - 4) < 0.01) {
+        cube_intersect_bottom = true;
+    }
     return true; 
 } 
 
@@ -556,6 +563,7 @@ struct WorldObjects
     std::vector<Cube> cubes;
     std::vector<Surface> surfaces;
     std::vector<Cone> cones;
+    //std::vector<float> refr_indxs;
 };
 
 #endif //__TEMPLATES_H__

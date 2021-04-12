@@ -23,6 +23,71 @@ float cosinus(const Vec3D& a, const Vec3D& b)
     return m / (n1 * n2);
 }
 
+/* Vec3D refract(const Vec3D &I, Vec3D N, float outcoming,  float incoming = 1.f) {
+    // if (dot(I, N) < 0) {
+    //     N = -N;
+    // } else {
+    //     float tmp = outcoming;
+    //     outcoming = incoming;
+    //     incoming = tmp;
+    // }
+    // float cos_t1 = cosinus(I, N);
+    // std::cout << "I: " << I << std::endl;
+    // std::cout << "N: " << N << std::endl;
+    // std::cout << "cos: " << cos_t1 << std::endl;
+    // float sin_t1 = std::sqrt(1.0 - cos_t1 * cos_t1);
+    // Vec3D tang = (I - N * cos_t1).normalize();
+    // std::cout << incoming << " " << outcoming << std::endl;
+    // float n1n2 = incoming / outcoming;
+    // float sin_t2 = sin_t1 * n1n2;
+    // if (sin_t2 > 1) {
+    //     return reflect(-I, N);
+    // }
+    // float cos_t2 = std::sqrt (1 - sin_t2 * sin_t2);
+    // return tang * sin_t2 + N * cos_t2;
+
+    //std::cout << "I: " << I << std::endl;
+    //std::cout << "N: " << N << std::endl;
+    if (cosinus(I, N) < 0) {
+        //std::cout << "!" << std::endl;
+        N = -N;
+        float tmp = outcoming;
+        outcoming = incoming;
+        incoming = tmp;
+    } else {
+        //std::cout << "!!" << std::endl;
+        float tmp = outcoming;
+        outcoming = incoming;
+        incoming = tmp;
+    }
+    float cos_A = cosinus(I, N);
+    //std::cout << "cos_A: " << cos_A << std::endl;
+
+    float n1n2 = incoming / outcoming;
+    //std::cout << incoming << " " << outcoming << std::endl;
+
+    float sin_B = n1n2 * std::sqrtf(1 - cos_A * cos_A);
+    //std::cout << "sin_B: " << sin_B << std::endl;
+    if (sin_B > 1) {
+        return reflect(-I, N);
+    }  
+    float cos_B = std::sqrtf(1 - sin_B * sin_B);
+    return I * n1n2 + N * (n1n2 * cos_A - cos_B);
+} */
+
+Vec3D refract(const Vec3D &I, const Vec3D &N, const float outcoming, const float incoming=1.f) { 
+    float cosi = -cosinus(I, N);
+    if (cosi < 0) {
+        return refract(I, -N, incoming, outcoming);
+    } 
+       
+    float eta = incoming / outcoming;
+
+    float k = 1 - eta*eta*(1 - cosi*cosi);
+
+    return k < 0 ? reflect(-I, N) : I*eta + N*(eta*cosi - sqrtf(k)); 
+}
+
 template <typename Object>
 void object_intersect(const Ray& ray, std::vector<Object>& objs, float &obj_dist, Vec3D& point, Vec3D& N, Material &material) {
     float dist_i;
@@ -41,51 +106,51 @@ bool scene_intersect(const Ray& ray, WorldObjects& world_obj, Vec3D& point, Vec3
     float obj_dist = std::numeric_limits<float>::max();
     
     object_intersect(ray, world_obj.spheres, obj_dist, point, N, material);
-    object_intersect(ray, world_obj.cubes, obj_dist, point, N, material);
     object_intersect(ray, world_obj.surfaces, obj_dist, point, N, material);
+   
+    object_intersect(ray, world_obj.cubes, obj_dist, point, N, material);
     object_intersect(ray, world_obj.cones, obj_dist, point, N, material);
-    // for(int i = 0; i < int(world_obj.spheres.size()); ++i) {
-    //     if (world_obj.spheres[i].ray_intersect(ray, dist_i) && dist_i < obj_dist) {
-    //         obj_dist = dist_i;
-    //         point = ray.orig + ray.dir * dist_i;
-    //         N = world_obj.spheres[i].normInPoint(point);
-    //         material = world_obj.spheres[i].material;
-    //         //std::cout << material.diffuse_color << std::endl;
-    //     }
-    // }
-    // for(int i = 0; i < int(world_obj.cubes.size()); ++i) {
-    //     if (world_obj.cubes[i].ray_intersect(ray, dist_i) && dist_i < obj_dist) {
-    //         obj_dist = dist_i;
-    //         point = ray.orig + ray.dir * dist_i;
-    //         N = world_obj.cubes[i].normInPoint(point);
-    //         material = world_obj.cubes[i].material;
-    //         //std::cout << material.diffuse_color << std::endl;
-    //     }
-    // }
-
-    // for(int i = 0; i < int(world_obj.surfaces.size()); ++i) {
-    //     if (world_obj.surfaces[i].ray_intersect(ray, dist_i) && dist_i < obj_dist) {
-    //         obj_dist = dist_i;
-    //         point = ray.orig + ray.dir * dist_i;
-    //         N = world_obj.surfaces[i].normInPoint(point);
-    //         material = world_obj.surfaces[i].material;
-    //         //std::cout << material.diffuse_color << std::endl;
-    //     }
-    // }
-
     return obj_dist < 10000;
 }
 
+
+
 Pixel cast_ray(const Ray& ray, WorldObjects& world_obj, size_t depth)
 {   
+    static float current_reflactive_index = 1.0;
+    static float previous_reflactive_index = 1.0;
     Vec3D point, N;
     Material material;
+    cube_intersect_bottom = false;
     if(depth < 5 && scene_intersect(ray, world_obj, point, N, material)) {
-    
-        Vec3D reflect_dir = reflect(-ray.dir, N).normalize();
-        Vec3D reflect_orig = dot(reflect_dir, N) < 0 ? point - N * 1e-3 : point + N*1e-3;
         
+        Vec3D reflect_dir = reflect(-ray.dir, N).normalize();
+        //std::cout << material.refractive_index << std::endl;
+        /*
+            if (material.refractive_index != refract_ind[i]) {
+            refract_ind[i + 1] = material.refractive_index;
+            current_reflactive_index = refract_ind[i + 1];
+            previous_reflactive_index = refract_ind[i];
+            ++i;
+            if (i == 3) {
+                i = 2;
+            }
+        } else {
+            --i;
+            current_reflactive_index = refract_ind[i + 1];
+            previous_reflactive_index = refract_ind[i];
+            refract_ind[i + 1] = 1.0;
+        }
+        */
+        
+        Vec3D refract_dir = refract(ray.dir, N, material.refractive_index).normalize();
+
+        Vec3D reflect_orig = dot(reflect_dir, N) < 0 ? point - N * 1e-3 : point + N * 1e-3;
+        Vec3D refract_orig = dot(refract_dir, N) < 0 ? point - N * 1e-3 : point + N * 1e-3;
+
+
         Pixel reflect_color = cast_ray(Ray(reflect_orig, reflect_dir), world_obj, depth + 1);
+        Pixel refract_color = cast_ray(Ray(refract_orig, refract_dir), world_obj, depth + 1);
         
         
         float diffuse_light_intensity = 0.2;
@@ -93,7 +158,6 @@ Pixel cast_ray(const Ray& ray, WorldObjects& world_obj, size_t depth)
         for (int i = 0; i < int(world_obj.lights.size()); ++i) {
             Vec3D light_dir = (world_obj.lights[i].position - point).normalize();
             bool check = true;
-            
             
             float light_distance = (world_obj.lights[i].position - point).norm();
             //std::cout << N << std::endl;
@@ -103,6 +167,7 @@ Pixel cast_ray(const Ray& ray, WorldObjects& world_obj, size_t depth)
             //float t = std::numeric_limits<float>::max();
             Ray new_ray(shadow_orig, light_dir);
             Material material_tmp;
+
             if (scene_intersect(new_ray, world_obj, shadow_pt, shadow_N, material_tmp)) {
                 if ((shadow_pt - shadow_orig).norm() < light_distance) {
                     check = false;
@@ -116,7 +181,7 @@ Pixel cast_ray(const Ray& ray, WorldObjects& world_obj, size_t depth)
         }
         Pixel pix(1., 1., 1.);
         material.diffuse_color = material.diffuse_color * diffuse_light_intensity * material.albedo.x + 
-                            pix * specular_light_intensity * material.albedo.y + reflect_color * material.albedo.z;
+                            pix * specular_light_intensity * material.albedo.y + reflect_color * material.albedo.z + refract_color * material.albedo.a;
 
         return material.diffuse_color;
     }
@@ -372,19 +437,27 @@ int main()
     
     Material mirror(1.0, Vec4D(0.0, 10.0, 0.8, 0.), Pixel(1.0, 1.0, 1.0), 100.);
 
+    Material glass(1.3, Vec4D(0.0, 0.5, 0.1, 0.8), Pixel(0.6, 0.7, 0.8), 125.);
+
     Surface surface(5, 1.5, dark_gray, light_gray);
     //---------------------------------<Objects>---------------------------------;
     Sphere sphere1(Vec3D(5, -6 , 5), 2, ivory);
     Sphere sphere2(Vec3D(0, -6 , 6), 2, red_rubber);
 
-    Sphere sphere3(Vec3D(-8, 0 , 1), 2, dark_orchid);
+    Sphere sphere3(Vec3D(-8, 0 , 1), 2, glass);
+    Sphere sphere4(Vec3D(0, 0, 10), 2, red_rubber);
 
-    Cube cube(Vec3D(0, 0, 0), 4, mirror); 
 
-    Cone cone(Vec3D(0, 5, 0), 8, 1, ivory, mirror);
+    //Sphere sphere_in_cube(Vec3D(0, 0, 0), 2, ivory);
+
+    Cube cube(Vec3D(0, 0, 0), 4, glass); 
+
+    Cone cone(Vec3D(0, 5., 0), 8, 1, ivory, dark_orchid);
+
+    //---------------------------------<Camera>---------------------------------;
 
     Vec3D default_camera(0, 0, -50);
-    Vec3D rotation(25, 15, 0);
+    Vec3D rotation(20, 30, 0);
 
     //---------------------------------<Lights>---------------------------------;
     Light light1(Vec3D(0, -6, 0), 1.2);
@@ -395,9 +468,11 @@ int main()
 
     world_obj.surfaces.push_back(surface);
 
-    world_obj.spheres.push_back(sphere1);
-    world_obj.spheres.push_back(sphere2);
+    //world_obj.spheres.push_back(sphere1);
+    //world_obj.spheres.push_back(sphere2);
     world_obj.spheres.push_back(sphere3);
+    world_obj.spheres.push_back(sphere4);
+    //world_obj.spheres.push_back(sphere5);
 
     world_obj.cubes.push_back(cube);
 
@@ -408,7 +483,11 @@ int main()
     // world_obj.lights.push_back(light3);
     // world_obj.lights.push_back(light4);
     //world_obj.lights.push_back(light5);
-
+    std::cout << "----<start>----" << std::endl;
     render(world_obj, default_camera, rotation);
+    Vec3D newdir = refract(Vec3D(1, 0, 1), Vec3D(-1, 0, 0), 1.);
+    std::cout << "Inside: " <<newdir << std::endl << std::endl;
+    Vec3D newdir2 = refract(newdir, Vec3D(0, 0, 1), 1.);
+    std::cout << "Outside: " << newdir2 << std::endl;
     return 0;
 }
